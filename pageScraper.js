@@ -4,8 +4,10 @@ export const scraperObject = {
         let page = await browser.newPage();
         console.log(`Navigating to ${this.url}...`);
         await page.goto(this.url);
-
+		let scrapedData = [];
+		
         // Wait for the required DOM to be rendered
+		async function scrapeCurrentPage(){
         await page.waitForSelector('.products');
         // Get the link to all the required books
         let urls = await page.$$eval('main ul > li', links=>{
@@ -19,7 +21,7 @@ export const scraperObject = {
 			let dataObj = {};
 			let newPage = await browser.newPage();
 			await newPage.goto(link);
-			dataObj['Title'] = await newPage.$eval('h3', text => text.textContent);
+			dataObj['Title'] = await newPage.$eval('.summary > h1', text => text.textContent);
 			dataObj['Price'] = await newPage.$eval('.price ins > span > bdi', text => text.textContent);
 			// dataObj['noAvailable'] = await newPage.$eval('.instock.availability', text => {
 			// 	// Strip new line and tab spaces
@@ -29,7 +31,7 @@ export const scraperObject = {
 			// 	let stockAvailable = regexp.exec(text)[1].split(' ')[0];
 			// 	return stockAvailable;
 			// });
-			dataObj['imageUrl'] = await newPage.$eval('.products-img > a', img => img.src);
+			dataObj['imageUrl'] = await newPage.$eval('.woocommerce-product-gallery__wrapper a > img', img => img.src);
 			// dataObj['Description'] = await newPage.$eval('#product_description', div => div.nextSibling.nextSibling.textContent);
 			// dataObj['upc'] = await newPage.$eval('.table.table-striped > tbody > tr > td', table => table.textContent);
 			resolve(dataObj);
@@ -38,10 +40,28 @@ export const scraperObject = {
 
 		for(let link of urls){
 			let currentPageData = await pagePromise(link);
-			// scrapedData.push(currentPageData);
-			console.log(currentPageData);
+			scrapedData.push(currentPageData);
+			// console.log(currentPageData);
 		}
+		// When all the data on this page is done, click the next button and start the scraping of the next page
+			// You are going to check if this button exist first, so you know if there really is a next page.
+			let nextButtonExist = false;
+			try{
+				const nextButton = await page.$eval('.next ', a => a.textContent);
+				nextButtonExist = true;
+			}
+			catch(err){
+				nextButtonExist = false;
+			}
+			if(nextButtonExist){
+				await page.click('.next ');	
+				return scrapeCurrentPage(); // Call this function recursively
+			}
+			await page.close();
+			return scrapedData;
+		}
+		let data = await scrapeCurrentPage();
+		console.log(data);
+		return data;
     }
 }
-
-// export default scraperObject;
